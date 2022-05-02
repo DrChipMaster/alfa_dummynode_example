@@ -4,11 +4,34 @@
 #include <chrono>
 
 
-AlfaInterface::AlfaInterface(pcl::PointCloud<pcl::PointXYZI>::Ptr pcloud)
+AlfaInterface::AlfaInterface(pcl::PointCloud<pcl::PointXYZI>::Ptr input_cloud)
 {
-    this->pcloud = pcloud;
+    this->pcloud = input_cloud;
     subscrive_topics();
     alive_ticker = new boost::thread(&AlfaInterface::ticker_thread,this);
+}
+
+void AlfaInterface::publish_pointcloud(pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud)
+{
+    alfa_msg::AlfaMetrics output;
+    alfa_msg::MetricMessage new_metric;
+    new_metric.metric_name = "Point cloud points";
+    new_metric.metric = output_cloud->size();
+    new_metric.units = "Points";
+    output.metrics.push_back(new_metric);
+    output.message_tag = "Dummy point cloud";
+    sensor_msgs::PointCloud2 pcl2_frame;
+    pcl::toROSMsg(*output_cloud,pcl2_frame);
+
+    cloud_publisher.publish(pcl2_frame);
+    publish_metrics(output);
+
+}
+
+void AlfaInterface::publish_metrics(alfa_msg::AlfaMetrics &metrics)
+{
+    filter_metrics.publish(metrics);
+
 }
 
 void AlfaInterface::cloud_cb(const sensor_msgs::PointCloud2ConstPtr &cloud)
@@ -21,21 +44,17 @@ void AlfaInterface::cloud_cb(const sensor_msgs::PointCloud2ConstPtr &cloud)
     }
     cout<<"Recieved cloud"<<endl;
     pcl::fromROSMsg(*cloud,*pcloud);
+    publish_pointcloud(pcloud);
     
 }
 
 bool AlfaInterface::parameters_cb(alfa_msg::AlfaConfigure::Request &req, alfa_msg::AlfaConfigure::Response &res)
 {
-    alfa_msg::AlfaMetrics output;
     cout<<"Recieved FilterSettings with size" <<req.configurations.size()<<"... Updating"<<endl;
     for (int i=0; i< req.configurations.size();i++) {
         cout <<"Configuration: "<<i<< " With name: "<< req.configurations[i].config_name<< " with value: "<< req.configurations[i].config<<endl;
-        alfa_msg::MetricMessage new_metric;
-        new_metric.metric =  req.configurations[i].config;
-        new_metric.metric_name = req.configurations[i].config_name;
-        output.metrics.push_back(new_metric);
     }
-    filter_metrics.publish(output);
+
     res.return_status=1;
     return true;
 
@@ -61,8 +80,9 @@ void AlfaInterface::subscrive_topics()
 
     sub_parameters = nh.advertiseService("dummy_settings",&AlfaInterface::parameters_cb,this);
     ros::NodeHandle n;
-    filter_metrics = n.advertise<alfa_msg::AlfaMetrics>("dummy_metrics", 0);
-    alive_publisher = n.advertise<alfa_msg::AlfaAlivePing>("dummy_alive",0);
+    filter_metrics = n.advertise<alfa_msg::AlfaMetrics>("dummy_metrics", 1);
+    alive_publisher = n.advertise<alfa_msg::AlfaAlivePing>("dummy_alive",1);
+    cloud_publisher = n.advertise<sensor_msgs::PointCloud2>("alfa_dummy_cloud",1);
     m_spin_thread = new boost::thread(&AlfaInterface::spin, this);
 
 

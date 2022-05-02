@@ -19,14 +19,17 @@
 #include "alfa_msg/AlfaMetrics.h"
 #include "alfa_msg/AlfaAlivePing.h"
 
-#define TIMER_SLEEP 1000
+#define TIMER_SLEEP 10000
 
 
 using namespace std;
 class AlfaInterface
 {
 public:
-    AlfaInterface(pcl::PointCloud<pcl::PointXYZI>::Ptr pcloud);
+    AlfaInterface(pcl::PointCloud<pcl::PointXYZI>::Ptr input_cloud);
+    void publish_pointcloud(pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud);
+    void publish_metrics(alfa_msg::AlfaMetrics &metrics);
+
 
 private:
     void cloud_cb (const  sensor_msgs::PointCloud2ConstPtr& cloud);
@@ -41,6 +44,7 @@ private:
     boost::thread *m_spin_thread;
     ros::Publisher filter_metrics;
     ros::Publisher alive_publisher;
+    ros::Publisher cloud_publisher;
 
     boost::thread* alive_ticker;
 
